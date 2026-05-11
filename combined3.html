@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETI Quiz-3 - ETI Quiz Hub</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="quiz-container">
+        <div class="quiz-header">
+            <h1>ETI Quiz-3</h1>
+            <div class="quiz-info">
+                <div><strong>Questions:</strong> 70 | <strong>Time:</strong> 90 minutes</div>
+                <div class="timer" id="timer">90:00</div>
+            </div>
+        </div>
+
+        <div id="rollNumberModal" class="modal show">
+            <div class="modal-content">
+                <h2>Enter Your Roll Number</h2>
+                <p>Enter your roll number to start the quiz (1-66)</p>
+                <input type="number" id="rollNumberInput" placeholder="e.g., 45" min="1" max="66" required>
+                <button class="btn btn-primary" onclick="startQuiz()">Start Quiz</button>
+            </div>
+        </div>
+
+        <div id="quizContent" style="display: none;">
+            <div class="question-container">
+                <div class="question-number" id="questionNumber"></div>
+                <div class="question-text" id="questionText"></div>
+                <div class="options" id="optionsContainer"></div>
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" id="prevBtn" onclick="previousQuestion()">Previous</button>
+                <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">Next</button>
+                <button class="btn btn-primary" id="submitBtn" onclick="submitQuiz()" style="display: none;">Submit Quiz</button>
+            </div>
+        </div>
+
+        <div id="resultsContainer" class="results-container" style="display: none;">
+            <h2>Quiz Completed!</h2>
+            <div class="score-display" id="scoreDisplay"></div>
+            <div class="percentage" id="percentageDisplay"></div>
+            <button class="download-btn" onclick="downloadPDF()">Download Results PDF</button>
+            <div style="margin-top: 30px;">
+                <a href="../index.html" class="btn btn-secondary">Back to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/google-sheets.js"></script>
+    <script>
+        const QUIZ_NAME = "ETI Quiz-3";
+        const TIME_LIMIT = 5400;
+        let timeLeft = TIME_LIMIT;
+        let currentQuestion = 0;
+        let userAnswers = [];
+        let rollNumber = null;
+        let timerInterval = null;
+
+        const questions = [
+        {question: "Consider the following statements regarding the End to End Digital Investigation Process (EEDIP) model: The \"Event Normalization\" phase resolves discrepancies and contradictions between different pieces of evidence. The model operates on the premise that every digital incident has a source, a destination, and a path between them. Which of the statements is/are correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 1, explanation: "Statement 1 is incorrect because resolving discrepancies is the function of the \"Event De-confliction\" phase, not Event Normalization (which standardizes data formats). Statement 2 is correct, reflecting the core principle of EEDIP."},
+        {question: "Which specific protocol is primarily utilized by a Media Gateway Controller (Softswitch) to communicate with and direct physical Media Gateways?", options: ["A) RTP/RTCP", "B) H.248/MEGACO", "C) MPLS", "D) BGP"], correct: 1, explanation: "The Media Gateway Controller (MGC) communicates with Media Gateways (MGWs) using control protocols such as H.248/MEGACO or MGCP to establish and release media channels."},
+        {question: "Match the specific Generative AI architectures to their primary functions: P. Transformers Q. Generative Adversarial Networks (GANs) R. Diffusion Models S. Variational Autoencoders (VAEs) Highly effective at generating realistic images and videos by pitting two neural networks against each other. Used for structured data and reconstruction tasks. Utilize self-attention to process sequential data like text. Gradually refine random noise into high-quality images.", options: ["A) P-3, Q-1, R-4, S-2", "B) P-3, Q-4, R-1, S-2", "C) P-1, Q-3, R-2, S-4", "D) P-2, Q-1, R-4, S-3"], correct: 0, explanation: "Transformers handle sequential data (3); GANs use generator/discriminator networks for realistic media (1); Diffusion models refine noise into high-quality images (4); VAEs are used for structured data/reconstruction (2)."},
+        {question: "Assertion: Dynamic Voltage and Frequency Scaling (DVFS) decreases a processor's power consumption by permanently lowering its maximum clock speed. Reason: Low-power processors in green computing adjust power usage dynamically based on the current computational workload.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 3, explanation: "The Assertion is false because DVFS does not \"permanently\" lower the maximum clock speed; rather, it adjusts the voltage and frequency dynamically in real-time. The Reason accurately describes this dynamic adjustment."},
+        {question: "In a hybrid blockchain architecture, which of the following best describes the \"Dual Nature\" functionality?", options: ["A) The network uses both Proof of Work and Proof of Stake simultaneously for every block", "B) Organizations can execute some operations on a permissioned, restricted network while sharing cryptographic proofs to a public, transparent network", "C) The ledger requires two separate tokens to process a single transaction", "D) Data is stored on both a centralized SQL database and a decentralized node simultaneously"], correct: 1, explanation: "The \"Dual Nature\" of hybrid blockchains allows organizations to keep sensitive data private (restricted access) while utilizing a public chain for transparency and verifiable auditability."},
+        {question: "An advanced cyberattack exploits the \"impedance mismatch\" between a web application and its protective security layers by mimicking human typing speeds and erratic mouse movements. This attack is specifically designed to bypass which of the following?", options: ["A) Signature-based intrusion detection systems", "B) Behavioral and logical rules of a Web Application Firewall (WAF)", "C) SSL/TLS encryption handshake protocols", "D) Multi-Factor Authentication (MFA) tokens"], correct: 1, explanation: "Advanced WAF bypass techniques exploit \"impedance mismatch.\" Attackers mimic human behavior and timing specifically to defeat the behavioral and logical analysis rules of modern WAFs that look for bot-like activity."},
+        {question: "Under the Digital Personal Data Protection (DPDP) Act, 2023, what is the maximum monetary penalty that can be imposed on a Data Principal for breaching their duties, such as impersonating another person or filing frivolous grievances?", options: ["A) Rs.10,000", "B) Rs.5 Lakh", "C) Rs.10 Crore", "D) Rs.250 Crore"], correct: 0, explanation: "Under Section 33 of the DPDP Act 2023, individuals (Data Principals) who breach their duties by giving false information or filing frivolous grievances face penalties up to Rs.10,000. (The Rs.250 crore penalty applies to Data Fiduciaries)."},
+        {question: "Which IoT actuator relies heavily on \"pseudo-elasticity\" and undergoes a phase transformation due to temperature changes to generate movement?", options: ["A) Voice Coil Actuator", "B) Brushless DC Motor", "C) Shape Memory Alloy (SMA) Actuator", "D) Piezoelectric Actuator"], correct: 2, explanation: "Shape Memory Alloys (SMAs) like Nitinol deform at low temperatures and return to their original shape when heated above a specific transformation temperature. This property includes undergoing significant elastic deformation (pseudo-elasticity)."},
+        {question: "Consider the following statements about the NGN IP Core Network: It relies strictly on circuit-switched protocols to guarantee voice quality. It utilizes Synchronous Optical Networking (SONET) and Multiprotocol Label Switching (MPLS) for high-speed packet forwarding. Which of the statements is/are correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 1, explanation: "Statement 1 is false because the NGN IP Core is strictly packet-switched (All-IP), entirely replacing legacy circuit-switched networks. Statement 2 is true."},
+        {question: "In a Transformer neural network, which component ensures that complex patterns can be captured by applying identical transformations to each position independently after the attention layers?", options: ["A) Multi-Head Attention", "B) Residual Connections", "C) Position-wise Feed-Forward Networks", "D) Layer Normalization"], correct: 2, explanation: "After the attention layers, the processed data passes through a position-wise feed-forward network, which applies the same independent transformations to each position to learn complex patterns."},
+        {question: "Which consensus mechanism relies on token holders voting for a small, pre-approved group of nodes that are exclusively entrusted to validate transactions and secure the network?", options: ["A) Practical Byzantine Fault Tolerance (PBFT)", "B) Proof of Authority (PoA)", "C) Delegated Proof of Stake (DPoS)", "D) Federated Consensus"], correct: 2, explanation: "In Delegated Proof of Stake (DPoS), such as in EOS or TRON, token holders \"vote\" to elect a small group of delegates who are then responsible for validating transactions and creating blocks."},
+        {question: "An investigator creates a forensic image of a compromised server. To strictly satisfy the \"Integrity Rule\" of digital forensics, what must the investigator do next?", options: ["A) Compress the forensic image to save storage space", "B) Use hash functions like SHA-256 to verify that the forensic image perfectly matches the original data", "C) Upload the image to an unencrypted public cloud server for peer review", "D) Perform an OS downgrade attack on the image"], correct: 1, explanation: "The Integrity Rule demands that data remains untouched and unmodified. Investigators use write-blockers and generate hash values (like SHA-256) to mathematically prove the copied evidence perfectly matches the original."},
+        {question: "Assertion: Small Language Models (SLMs) require constant cloud connectivity to function due to their vast parameter counts. Reason: SLMs process language using specialized algorithms optimized for devices with limited computational power and memory.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 3, explanation: "The Assertion is false because SLMs have fewer parameters (not vast), specifically enabling them to run locally on devices without constant cloud connectivity (offline use). The Reason is a true statement about SLM design."},
+        {question: "A medical student wears a headset that places them inside a highly detailed, 3D operating room. They cannot see the physical classroom around them. They are practicing an operation using gloves that vibrate when cutting virtual tissue. Which two immersive technologies are primarily active here?", options: ["A) Augmented Reality and Telepresence", "B) Mixed Reality and First-Person View (FPV)", "C) Virtual Reality and Haptic Technology", "D) Extended Reality and Augmented Reality"], correct: 2, explanation: "Since the real world is completely blocked out, the visual technology is Virtual Reality (VR). The gloves vibrating to simulate physical resistance is an application of Haptic Technology."},
+        {question: "Under the Information Technology Act, 2000 (Amended 2008), what specific offense is penalized by Section 66F with up to life imprisonment?", options: ["A) Identity theft and fraudulent use of electronic signatures", "B) Unauthorized access to declared \"protected systems\"", "C) Capturing or publishing images of a private area without consent", "D) Acts committed through computers to threaten the unity, integrity, security, or sovereignty of India"], correct: 3, explanation: "Section 66F specifically defines and heavily penalizes Cyber Terrorism, which involves acts threatening India's sovereignty, integrity, or security, carrying a maximum penalty of life imprisonment."},
+        {question: "Which specific type of IoT gateway would most likely be deployed in a remote agricultural field lacking physical broadband infrastructure, relying on standards like 6LoWPAN or NB-IoT?", options: ["A) Wired IoT Gateway", "B) Wireless IoT Gateway", "C) Optical Transport Gateway", "D) Access Gateway"], correct: 1, explanation: "Wireless IoT Gateways (using protocols like Zigbee, LoRa, NB-IoT, and 6LoWPAN) are ideal for smart agriculture and remote areas where wired connections are not feasible."},
+        {question: "Consider the following statements regarding Ransomware 2.0: It exclusively targets Linux-based systems to exploit kernel vulnerabilities. It employs a \"Double Extortion\" tactic where attackers steal sensitive data before encrypting files to increase the likelihood of payment. Which of the statements is/are correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 1, explanation: "Statement 1 is false; while Ransomware 2.0 does target Linux/VMware ESXi, it does not do so exclusively (it heavily targets cloud services and Windows networks too). Statement 2 accurately describes the devastating \"Double Extortion\" tactic."},
+        {question: "In quantum computing, which mathematical property enables an algorithm to manipulate the probabilities of outcomes, boosting the likelihood of the correct answer while suppressing incorrect ones?", options: ["A) Quantum Superposition", "B) Quantum Decoherence", "C) Quantum Interference", "D) Quantum Entanglement"], correct: 2, explanation: "Quantum Interference is the principle used within quantum circuits to constructively enhance correct computational paths and destructively cancel out incorrect ones."},
+        {question: "Which digital forensics model was specifically designed to bridge the gap between traditional physical crime scene investigations and digital evidence handling?", options: ["A) DFRWS Model", "B) Integrated Digital Investigation Process (IDIP) Model", "C) Abstract Digital Forensics Model (ADFM)", "D) End to End Digital Investigation Process (EEDIP) Model"], correct: 1, explanation: "The IDIP Model (Carrier and Spafford, 2003) specifically integrates digital evidence handling with traditional physical crime investigations (featuring dedicated \"Physical\" and \"Digital\" crime scene phases)."},
+        {question: "Match the AI learning models to their operational definitions: P. Semi-Supervised Learning Q. Reinforcement Learning R. Supervised Learning S. Unsupervised Learning Maps input features to known outputs using entirely labeled data. Learns optimal strategies dynamically via a system of rewards and penalties. Discovers hidden structures in entirely unlabeled data. Leverages a massive amount of unlabeled data alongside a small subset of labeled data.", options: ["A) P-4, Q-2, R-1, S-3", "B) P-1, Q-2, R-4, S-3", "C) P-4, Q-1, R-2, S-3", "D) P-2, Q-4, R-3, S-1"], correct: 0, explanation: "Semi-Supervised uses a mix of labeled and unlabeled data (4); Reinforcement uses rewards/penalties (2); Supervised uses fully labeled data (1); Unsupervised uses no labels (3)."},
+        {question: "A \"Signaling Gateway\" in a Next Generation Network (NGN) is primarily responsible for translating:", options: ["A) Analog voice signals into high-definition digital video streams", "B) Circuit-switched SS7 signaling into IP-based signaling such as SIP or Diameter", "C) IPv4 traffic into IPv6 traffic across the IP Core", "D) Local Wi-Fi signals into 5G cellular frequencies"], correct: 1, explanation: "The specific role of the Signaling Gateway (SG) is to provide interworking between legacy PSTN/ISDN networks (which use SS7) and the IP-based NGN core (which uses SIP, H.323, BICC, Diameter)."},
+        {question: "Which specific component within the \"Contract Layer\" of blockchain architecture is responsible for compiling and executing the business logic of smart contracts?", options: ["A) Merkle Tree", "B) Gossip Protocol", "C) Virtual Machine (e.g., EVM or WASM)", "D) Practical Byzantine Fault Tolerance algorithm"], correct: 2, explanation: "Within the Contract Layer, Virtual Machines (VMs) like the Ethereum Virtual Machine (EVM) or WebAssembly (WASM) act as the computational engines that run the smart contracts."},
+        {question: "Assertion: An OS Downgrade Attack typically utilizes brute-force password cracking to gain administrative access. Reason: Once Virtualization-Based Security (VBS) is compromised in an OS Downgrade Attack, the attacker can easily exploit older kernel vulnerabilities.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 3, explanation: "The Assertion is false because an OS Downgrade Attack involves exploiting update flaws to inject malicious instructions, not brute-forcing passwords. The Reason is a true statement about the mechanics of the attack after VBS is disabled."},
+        {question: "In the e-waste recycling process, the \"Dismantling\" phase is best described as:", options: ["A) Using chemical processes to extract gold and silver from motherboards", "B) Disposing of hazardous chemicals in eco-friendly landfills", "C) Breaking down collected devices into distinct physical components like plastic, metal, and circuit boards", "D) Repairing broken screens on smartphones so they can be resold"], correct: 2, explanation: "Dismantling is the physical separation of a device into its base components (plastics, metals, boards) to prepare them for specific material recovery processes. (Repairing is refurbishing; extracting gold is recovery)."},
+        {question: "A factory uses a sensor to detect the presence of metallic objects on a conveyor belt in a dirty, high-vibration environment where optical sensors frequently fail. Which proximity sensor is most appropriate?", options: ["A) Photoelectric Sensor", "B) Ultrasonic Sensor", "C) Inductive Proximity Sensor", "D) Passive Infrared (PIR) Sensor"], correct: 2, explanation: "Inductive proximity sensors generate an electromagnetic field specifically to detect the presence of metallic objects, making them highly reliable in dirty or harsh industrial environments."},
+        {question: "Consider the following regarding generative AI architectures: Autoencoders are commonly used for capturing facial characteristics to enable face-swapping in deepfakes. Diffusion models are generally used for natural language processing and text generation. Which is correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 0, explanation: "Statement 1 is correct (Autoencoders are used in deepfakes). Statement 2 is incorrect because Diffusion models (like Stable Diffusion) are used for image generation, while Transformers are used for text generation."},
+        {question: "In UML Modeling for Digital Forensics, which diagram is utilized to map the varying lifecycle phases of digital evidence, such as moving from a \"preserved\" state to an \"analyzed\" state?", options: ["A) Deployment Diagram", "B) Use Case Diagram", "C) Activity Diagram", "D) Statechart Diagram"], correct: 3, explanation: "Statechart Diagrams model the different states or lifecycles that an object (like a piece of digital evidence) goes through during the investigation process."},
+        {question: "An attacker gains access to an IoT device's backend cloud interface and uses it to deploy malicious firmware to thousands of connected sensors. Which specific IoT vulnerability did the attacker exploit?", options: ["A) Insecure Ecosystem Interfaces", "B) Weak/Default Passwords", "C) Lack of Network Segmentation", "D) Physical Tampering"], correct: 0, explanation: "Exploiting the back-end, cloud, or mobile management platforms that control IoT devices is defined as exploiting \"Insecure Ecosystem Interfaces.\""},
+        {question: "Which advanced AI model actively develops a \"chain of thought,\" reflecting on and self-correcting its logic step-by-step before outputting an answer to a complex mathematical problem?", options: ["A) Small Language Model (SLM)", "B) Reactive Machine", "C) AI Reasoning Model (e.g., OpenAI o1)", "D) Traditional Predictive LLM"], correct: 2, explanation: "AI Reasoning Models break down complex queries into intermediate steps, forming a \"chain of thought\" and deliberating analytically (sometimes self-correcting) before providing a final response."},
+        {question: "Under the IT (Amendment) Act 2008, Section 65 deals with which of the following cyber offenses?", options: ["A) Capturing or sharing intimate images without consent", "B) Intentionally concealing, destroying, or altering computer source code required to be kept by law", "C) Publishing material depicting children in sexually explicit acts", "D) Disclosing personal information in breach of a lawful contract"], correct: 1, explanation: "Section 65 strictly penalizes tampering with computer source documents (concealing, destroying, or altering required source code)."},
+        {question: "Assertion: 5G networks inherently suffer from signal interference caused by physical obstructions like buildings and trees. Reason: 5G relies heavily on high-frequency bands that have short ranges and struggle to penetrate solid objects.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 0, explanation: "The extremely high-frequency millimeter waves used by 5G provide immense bandwidth but suffer from severe range limitations and vulnerability to physical obstacles, making the Reason the direct cause of the Assertion."},
+        {question: "Which type of blockchain operates with pre-selected participants and shared governance among multiple trusted organizations, heavily utilizing consensus algorithms like RAFT or PBFT?", options: ["A) Pure Public Blockchain", "B) Consortium Blockchain", "C) Unpermissioned Hybrid Blockchain", "D) Proof-of-Work Private Blockchain"], correct: 1, explanation: "A Consortium Blockchain is a permissioned network governed jointly by a pre-selected group of organizations, relying on lightweight consensus algorithms like PBFT rather than PoW."},
+        {question: "Match the specific 5G features to their primary IoT use cases: P. Network Slicing Q. Ultra-Reliable Low-Latency Communication (uRLLC) R. Massive Machine-Type Communication S. Enhanced Mobile Broadband (eMBB) Providing near-instantaneous (<1ms) response times for remote robotic surgery. Creating a customized, isolated virtual network exclusively for a city's smart meter data. Enabling high-speed 20 Gbps data transmission for immersive AR/VR maintenance overlays. Supporting millions of interconnected sensors per square kilometer in a smart city.", options: ["A) P-2, Q-1, R-4, S-3", "B) P-4, Q-1, R-2, S-3", "C) P-2, Q-4, R-1, S-3", "D) P-1, Q-2, R-3, S-4"], correct: 0, explanation: "Network Slicing creates custom virtual networks (2); uRLLC provides sub-millisecond latency (1); Massive Connectivity supports millions of devices (4); eMBB provides high speeds (3)."},
+        {question: "In the development practice known as \"Vibe Coding,\" the human developer's role drastically shifts from writing line-by-line syntax to:", options: ["A) Manually compiling assembly language binaries", "B) Articulating high-level goals and providing iterative natural language feedback to an LLM \"co-pilot\"", "C) Designing the physical silicon architecture of the AI processors", "D) Encrypting the final application using AES-256"], correct: 1, explanation: "Vibe coding democratizes software development by allowing humans to focus on the big picture, vision, and natural language prompts, while the AI handles the intricate syntax and code generation."},
+        {question: "Consider the following statements regarding the Abstract Digital Forensics Model (ADFM): It is a 5-phase model primarily focused on integrating physical crime scenes with digital ones. It added \"Approach Strategy\" and \"Preparation\" phases to earlier frameworks to maximize data collection while minimizing disruption. Which is correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 1, explanation: "Statement 1 is false (that describes the IDIP model). Statement 2 is true, as the ADFM (a 9-phase model) specifically introduced Preparation and Approach Strategy to improve upon the DFRWS model."},
+        {question: "A drone pilot flying in an abandoned factory requires maximum maneuverability to perform complex acrobatic tricks without the drone's software attempting to auto-level the craft. Which FPV flight mode is being utilized?", options: ["A) Altitude Hold Mode", "B) Cinematic GPS Mode", "C) Acro Mode", "D) Autonomous Survey Mode"], correct: 2, explanation: "\"Acro Mode\" (manual mode) removes the drone's auto-stabilization limits, granting the pilot absolute manual control for maximum maneuverability and acrobatic tricks in FPV flying."},
+        {question: "Which of the following is a primary function of the \"Media Server (MS)\" within a Next Generation Network (NGN)?", options: ["A) Serving as the primary database for long-term customer billing records", "B) Translating legacy SS7 signaling into SIP packets", "C) Providing interactive services like IVR, playing announcements, and mixing audio streams for conferences", "D) Connecting local Wi-Fi users directly to the 5G core"], correct: 2, explanation: "The Media Server handles the actual media plane processing, functioning as a \"media toolbox\" for tasks like audio mixing, transcoding, playing tones, and executing Interactive Voice Response (IVR) logic."},
+        {question: "An attacker carefully injects corrupted data into the massive dataset being used to train a new AI facial recognition system, causing it to systematically fail to recognize a specific demographic. What kind of attack is this?", options: ["A) Evasion Attack", "B) Firmware-level Exploit", "C) Poisoning Attack", "D) Distributed Denial of Service"], correct: 2, explanation: "A Poisoning Attack occurs strictly during the training phase of an AI model, where the attacker corrupts the training data to fundamentally compromise the model's accuracy or fairness."},
+        {question: "Assertion: Smart contracts require a centralized third-party arbitrator to legally enforce their execution. Reason: Smart contracts are self-executing agreements whose terms and business logic are written directly into code on the blockchain.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 3, explanation: "The Assertion is completely false. The fundamental benefit of smart contracts is that they remove the need for centralized third-party arbitrators by relying on code for trustless, automated enforcement. The Reason is a true statement."},
+        {question: "Which specific component of an IoT architecture is responsible for applying \"Dynamic Voltage and Frequency Scaling (DVFS)\" to enhance energy efficiency?", options: ["A) High-capacity Cloud Server Racks", "B) Low-power Processors and Microcontrollers", "C) Analog-to-Digital Converters (ADCs)", "D) Passive Infrared (PIR) Sensors"], correct: 1, explanation: "DVFS is a power-management technique implemented directly on low-power processors and microchips to adjust their voltage and clock frequency based on real-time computational demand."},
+        {question: "According to the Section 70 of the Information Technology Act, what specific digital asset is safeguarded, with severe penalties prescribed for unauthorized access?", options: ["A) Publicly accessible social media profiles", "B) Declared \"Protected Systems\" such as national critical infrastructure", "C) Open-source software repositories", "D) Commercial movie streaming platforms"], correct: 1, explanation: "Section 70 specifically defines and protects \"protected systems\" (which encompasses Critical Information Infrastructure) from unauthorized access."},
+        {question: "Which NGN layer directly hosts actual applications and services like VoIP, Video Conferencing, and Cloud services, often utilizing Network Function Virtualization (NFV)?", options: ["A) Transport Layer", "B) Control Layer", "C) Service Layer", "D) Access Layer"], correct: 2, explanation: "The Service Layer is responsible for hosting and delivering the actual user-facing applications and services, decoupling them from the underlying transport and control infrastructure."},
+        {question: "Consider the following regarding IoT Actuators: A Micro-Electro-Mechanical System (MEMS) actuator combines mechanical and electrical components on a single silicon substrate. A BLDC motor utilizes brushes to mechanically reverse the polarity of the current in its coils. Which is correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 0, explanation: "Statement 1 is true. Statement 2 is false because a BLDC (Brushless DC) motor explicitly uses electronic commutation to switch current, eliminating the physical brushes entirely."},
+        {question: "In a decentralized Play-to-Earn (P2E) gaming ecosystem, how is \"True Ownership\" of a digital asset legally and technically guaranteed to the player?", options: ["A) By storing the item in the game developer's centralized SQL database", "B) By representing the asset as a Non-Fungible Token (NFT) stored on an immutable blockchain ledger", "C) By requiring players to sign a physical EULA before playing", "D) By associating the asset with the player's IP address"], correct: 1, explanation: "Blockchain gaming guarantees true ownership by minting digital assets (like swords or land) as NFTs on a decentralized ledger, placing them fully under the cryptographic control of the player's wallet."},
+        {question: "Match the Digital Forensic concepts with their respective definitions: P. Chain of Custody Q. Event De-confliction R. Hash Verification S. Reproducibility Rule Ensures another expert following the same process will achieve the exact same forensic results. Resolves contradictions between different pieces of evidence across logs. Mathematically proves that the copied digital evidence perfectly matches the original unmodified data. Maintains an unbroken, documented record of every person who handled the evidence.", options: ["A) P-4, Q-2, R-3, S-1", "B) P-4, Q-3, R-2, S-1", "C) P-2, Q-4, R-1, S-3", "D) P-1, Q-2, R-4, S-3"], correct: 0, explanation: "Chain of Custody is documentation of handling (4); Event De-confliction resolves contradictions (2); Hash Verification ensures integrity (3); Reproducibility ensures fairness and scientific validity (1)."},
+        {question: "Which IoT communication protocol is highly favored for Low-Power Wide-Area Network (LPWAN) deployments, such as sensors scattered across a vast agricultural farm?", options: ["A) Wi-Fi 6", "B) LoRaWAN", "C) Ethernet", "D) USB 3.0"], correct: 1, explanation: "LoRaWAN (Long Range Wide Area Network) is a wireless protocol specifically designed for long-range, low-power communication, making it ideal for distributed agricultural sensors."},
+        {question: "A \"51% attack\" on a blockchain network fundamentally compromises which core feature of the technology?", options: ["A) The use of public-private key cryptography for wallets", "B) The immutability and decentralized consensus of the ledger", "C) The speed at which light nodes can download block headers", "D) The physical cooling capacity of the mining rigs"], correct: 1, explanation: "A 51% attack occurs when a single entity controls the majority of the network's validating power, allowing them to manipulate the consensus, reverse transactions, and compromise the ledger's immutability."},
+        {question: "Assertion: Agentic AI systems rely entirely on human developers providing step-by-step prompts to complete complex software engineering tasks. Reason: Agentic AI systems like MetaGPT can architect, code, test, and deploy applications autonomously by acting as a team of role-based agents.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 3, explanation: "The Assertion is completely false; the defining feature of Agentic AI is its autonomy and ability to plan and execute multi-step workflows without constant human step-by-step prompting. The Reason correctly describes this autonomous capability."},
+        {question: "Under the DPDP Act 2023, what is the legal term used to describe the organization, company, or government body that determines the purpose and means of processing an individual's personal data?", options: ["A) Data Principal", "B) Data Processor", "C) Data Fiduciary", "D) Certifying Authority"], correct: 2, explanation: "The DPDP Act defines the entity determining the purpose and means of processing personal data as the \"Data Fiduciary.\" The individual to whom the data belongs is the \"Data Principal.\""},
+        {question: "Which type of proximity sensor utilizes a photodiode to detect changes in light reflection to determine if an object is nearby?", options: ["A) Capacitive Sensor", "B) Inductive Sensor", "C) Photoelectric Sensor", "D) Magnetic Sensor"], correct: 2, explanation: "Photoelectric sensors emit a light beam (often infrared) and use a photodiode to detect the reflection or interruption of that light to sense the presence of an object."},
+        {question: "Consider the following statements about Deepfakes: They are primarily generated using a combination of a generator network and a discriminator network working against each other. The discriminator's role is to identify fake media and provide feedback to improve the generator's output. Which is correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 2, explanation: "Both statements accurately describe the architecture of Generative Adversarial Networks (GANs), which are heavily used in creating deepfakes."},
+        {question: "In an NGN (Next Generation Network), what is the function of the \"Access Network\"?", options: ["A) It performs deep packet inspection to filter malware before it hits the cloud", "B) It serves as the physical \"first mile/last mile\" connection, linking end-user devices via technologies like xDSL, Fiber, or 5G to the provider's core IP network", "C) It hosts virtual reality applications in a centralized data center", "D) It converts SIP signaling back into SS7 signaling for the internet backbone"], correct: 1, explanation: "The Access Layer/Network provides the physical connectivity (the first/last mile) linking the subscriber's hardware to the telecommunications backbone using technologies like Fiber, Cable, or 5G."},
+        {question: "Which specific Green Data Center practice captures thermal exhaust from server racks and repurposes it to provide environmental heating to adjacent office buildings?", options: ["A) Server Virtualization", "B) Dynamic Frequency Scaling", "C) Free Air Cooling", "D) Heat Recovery"], correct: 3, explanation: "Heat Recovery involves capturing the significant waste heat generated by high-density computing equipment and reusing it for productive purposes like facility heating."},
+        {question: "A \"Voice Coil Actuator\" (VCA) creates highly precise linear motion. Which scientific principle does it rely on to generate this movement?", options: ["A) creates highly precise linear motion. Which scientific principle does it rely on to generate this movement? A) The Seebeck effect", "B) Piezoelectric deformation", "C) The Lorentz force", "D) Shape memory elasticity"], correct: 2, explanation: "VCAs operate on the same principle as audio loudspeakers, utilizing the Lorentz force generated by the interaction between an electric current passing through a coil and a permanent magnetic field."},
+        {question: "Which of the following best describes the core function of the \"Application Server (AS)\" in an NGN environment?", options: ["A) Transcoding video from H.264 to H.265", "B) Physically routing MPLS packets across the oceanic backbone", "C) Executing service logic for value-added services like call forwarding, prepaid billing, and video calling", "D) Providing physical DSL connections to rural homes"], correct: 2, explanation: "The Application Server (AS) is the brain of service delivery, responsible for executing the logic of user services (VoIP, IPTV, billing, call forwarding) and managing SIP sessions."},
+        {question: "Assertion: Firmware-level exploits are exceptionally dangerous because they can maintain persistent control over a system even if the operating system is completely reinstalled. Reason: Firmware operates at a level below the operating system and is generally unmonitored by standard desktop antivirus software.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 0, explanation: "Because firmware (like BIOS/UEFI) resides beneath the OS and initiates the boot process, malware injected here survives OS wipes and evades OS-level antivirus. The Reason perfectly explains the Assertion."},
+        {question: "Match the Sections of the Information Technology Act (Amended 2008) to their corresponding offenses: P. Section 66C Q. Section 66E R. Section 67B S. Section 72A Publishing or transmitting material depicting children in sexually explicit acts. Disclosing personal information in breach of a lawful contract. Identity theft and fraudulent use of electronic signatures. Violation of privacy by capturing or publishing images of a private area without consent.", options: ["A) P-3, Q-4, R-1, S-2", "B) P-4, Q-3, R-2, S-1", "C) P-1, Q-2, R-3, S-4", "D) P-3, Q-1, R-4, S-2"], correct: 0, explanation: "66C is Identity Theft (3); 66E is Privacy Violation (4); 67B is Child Pornography (1); 72A is Breach of Contractual Confidentiality (2)."},
+        {question: "In the architecture of Cloud-based IoT, the component responsible for performing localized data aggregation, filtering, and initial processing before transmitting the data over the internet is known as the:", options: ["A) Actuator Node", "B) Core IP Router", "C) IoT Gateway / Edge Computing layer", "D) Cloud Database Server"], correct: 2, explanation: "The IoT Gateway or Edge Computing node sits between the sensors and the cloud, pre-processing and aggregating data locally to save bandwidth and reduce latency."},
+        {question: "Consider the following regarding the \"Consensus Layer\" of a blockchain: It is responsible for bridging protocol-level operations with application-level DApps via Virtual Machines. It ensures fault tolerance by maintaining functionality even if some nodes act dishonestly. Which is correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 1, explanation: "Statement 1 is false (that describes the Contract Layer). Statement 2 is true; the Consensus Layer's primary job is to secure agreement, validate blocks, and provide fault tolerance against malicious nodes."},
+        {question: "Which type of generative AI model is primarily utilized to power Large Language Models (LLMs) like GPT-4 due to its ability to handle sequential data and weigh the context of words efficiently?", options: ["A) Generative Adversarial Networks (GANs)", "B) Diffusion Models", "C) Transformers", "D) Variational Autoencoders (VAEs)"], correct: 2, explanation: "Transformers, introduced in 2017, use self-attention mechanisms to efficiently process sequential data, making them the foundational architecture for modern LLMs."},
+        {question: "A hacker utilizes a legitimate administrator account's credentials to log into a corporate network. To avoid triggering behavioral security alarms, the hacker limits data exfiltration to normal business hours and downloads files at human-like speeds. What evasion concept is the hacker demonstrating?", options: ["A) Buffer Overflow", "B) Advanced WAF Behavioral and Logical Evasion", "C) Firmware Code Injection", "D) Zero-Day Hardware Exploit"], correct: 1, explanation: "By intentionally mimicking normal human behavior and timing, the attacker is employing behavioral evasion techniques to bypass advanced security firewalls and heuristic analysis."},
+        {question: "Which digital forensics framework was developed by Stephenson in 2003 with a specific focus on tracing an incident across a network from its origin to its target?", options: ["A) IDIP Model", "B) DFRWS Model", "C) End to End Digital Investigation Process (EEDIP) Model", "D) Abstract Digital Forensics Model (ADFM)"], correct: 2, explanation: "The EEDIP Model specifically emphasizes a \"Source-to-Destination Focus,\" tracing the path of a digital incident across network nodes."},
+        {question: "In a DC Motor used for IoT robotics, what is the specific role of the \"Armature\"?", options: ["A) It converts digital PWM signals into analog voltages", "B) It acts as the stationary permanent magnet", "C) It is the current-carrying coil that rotates inside the magnetic field due to electromagnetic force", "D) It provides electronic commutation to replace physical brushes"], correct: 2, explanation: "In a DC motor, the armature is the rotating coil of wire. When direct current passes through it while inside the stator's magnetic field, it experiences a force that causes it to rotate."},
+        {question: "Assertion: Quantum Entanglement allows a quantum computer to exist in multiple states of 0 and 1 simultaneously. Reason: Entanglement is a phenomenon where the state of one qubit becomes fundamentally linked to another, such that altering one instantly affects the other regardless of distance.", options: ["A) Both Assertion and Reason are true, and Reason is the correct explanation of Assertion", "B) Both Assertion and Reason are true, but Reason is not the correct explanation of Assertion", "C) Assertion is true, but Reason is false", "D) Assertion is false, but Reason is true"], correct: 3, explanation: "The Assertion is false because existing in multiple states simultaneously describes Superposition, not Entanglement. The Reason provides an accurate definition of Entanglement."},
+        {question: "Which of the following is a primary objective of the Cyber Crime Prevention against Women and Children (CCPWC) Scheme launched in 2018?", options: ["A) To enforce data localization rules on foreign e-commerce companies", "B) To establish a 24x7 online cybercrime reporting portal and dedicated cyber forensic laboratories", "C) To mandate the use of blockchain for all government document archiving", "D) To replace the Information Technology Act of 2000"], correct: 1, explanation: "The CCPWC Scheme provided technical assistance to set up cyber forensic labs and established the National Cyber Crime Reporting Portal (www.cybercrime.gov.in) to tackle offenses like cyberstalking and child exploitation."},
+        {question: "In a blockchain's Data Layer, how are individual blocks chronologically connected to ensure the ledger remains tamper-proof?", options: ["A) By referencing the IP address of the node that mined the previous block", "B) By using a decentralized SQL relational join", "C) By embedding the cryptographic hash of the previous block into the header of the new block", "D) By storing them on a centralized master server before distribution"], correct: 2, explanation: "Immutability and chronological linkage are achieved because each new block contains the unique cryptographic hash of the immediately preceding block. Altering old data changes its hash, breaking the entire subsequent chain."},
+        {question: "Consider the following regarding Telepresence technology: It relies exclusively on high-definition video and audio to simulate presence. Advanced setups can integrate robotics or haptics, allowing a remote user to manipulate physical objects in a distant environment. Which is correct?", options: ["A) 1 only", "B) 2 only", "C) Both 1 and 2", "D) Neither 1 nor 2"], correct: 1, explanation: "Statement 1 is false because telepresence does not rely exclusively on AV; as Statement 2 correctly notes, it can integrate robotics and haptics to allow physical interaction (e.g., tele-surgery or deep-sea exploration)."},
+        {question: "A farmer deploys an IoT system that measures the moisture content of the soil and automatically opens a water valve when the soil is too dry. In this system, the water valve mechanism serves as the:", options: ["A) Gateway", "B) Sensor", "C) Actuator", "D) Microcontroller"], correct: 2, explanation: "While the moisture detector is the sensor, the valve mechanism that performs the physical action (opening to release water) in response to the digital command is the actuator."},
+        {question: "Which type of hacker actively functions as a vigilante, aggressively targeting and disabling the malicious infrastructure operated by cybercriminals?", options: ["A) Gray Hat Hacker", "B) White Hat Hacker", "C) Red Hat Hacker", "D) Blue Hat Hacker"], correct: 2, explanation: "Red Hat Hackers are described as vigilantes who actively attack, hack back, and dismantle the systems and networks used by malicious Black Hat hackers."},
+        {question: "In the logical design of an IoT system, what is the primary responsibility of the \"Data Processing Layer\"?", options: ["A) Gathering raw analog data from the physical environment using temperature and pressure sensors", "B) Providing physical hardware connections like Ethernet and Fiber Optics", "C) Pre-processing, filtering, and analyzing collected data to reduce the burden on core IT infrastructure before routing it to applications", "D) Serving as the graphical user interface (GUI) displayed on a user's smartphone"], correct: 2, explanation: "The Data Processing Layer acts as the intermediary that manages, filters, and analyzes data (often via Edge computing or Cloud analytics) to extract insights before sending it to the user-facing Application Layer."}
+        ];
+
+        function startQuiz() {
+            const input = document.getElementById('rollNumberInput');
+            rollNumber = parseInt(input.value);
+            if (!rollNumber || rollNumber < 1 || rollNumber > 66) {
+                alert('Please enter a valid roll number (1-66)');
+                return;
+            }
+            const btn = document.querySelector('#rollNumberModal .btn-primary');
+            btn.textContent = 'Checking...';
+            btn.disabled = true;
+            
+            checkPreviousAttempt(rollNumber, QUIZ_NAME).then(result => {
+                if (result && result.attempted === true) {
+                    alert('You have already attempted this quiz!\n\nDate: ' + result.date + '\nScore: ' + result.score + '/' + result.total + ' (' + result.percentage + '%)\n\nYou cannot retake this quiz.');
+                    window.location.href = '../index.html';
+                    return;
+                }
+                document.getElementById('rollNumberModal').classList.remove('show');
+                document.getElementById('quizContent').style.display = 'block';
+                startTimer();
+                displayQuestion();
+            });
+        }
+
+        function startTimer() {
+            const timerElement = document.getElementById('timer');
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timerElement.textContent = minutes + ':' + seconds.toString().padStart(2, '0');
+                if (timeLeft <= 300) timerElement.classList.add('warning');
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    submitQuiz();
+                }
+            }, 1000);
+        }
+
+        function displayQuestion() {
+            const q = questions[currentQuestion];
+            document.getElementById('questionNumber').textContent = 'Question ' + (currentQuestion + 1) + ' of ' + questions.length;
+            document.getElementById('questionText').textContent = q.question;
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = '';
+            q.options.forEach((option, index) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                if (userAnswers[currentQuestion] === index) optionDiv.classList.add('selected');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'answer';
+                radio.value = index;
+                radio.checked = userAnswers[currentQuestion] === index;
+                radio.onchange = () => selectAnswer(index);
+                optionDiv.appendChild(radio);
+                optionDiv.appendChild(document.createTextNode(option));
+                optionDiv.onclick = () => {
+                    radio.checked = true;
+                    selectAnswer(index);
+                };
+                optionsContainer.appendChild(optionDiv);
+            });
+            document.getElementById('prevBtn').disabled = currentQuestion === 0;
+            const nextBtn = document.getElementById('nextBtn');
+            const submitBtn = document.getElementById('submitBtn');
+            if (currentQuestion === questions.length - 1) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'block';
+            } else {
+                nextBtn.style.display = 'block';
+                submitBtn.style.display = 'none';
+            }
+        }
+
+        function selectAnswer(index) {
+            userAnswers[currentQuestion] = index;
+            document.querySelectorAll('.option').forEach((opt, i) => {
+                opt.classList.toggle('selected', i === index);
+            });
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < questions.length - 1) {
+                currentQuestion++;
+                displayQuestion();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function previousQuestion() {
+            if (currentQuestion > 0) {
+                currentQuestion--;
+                displayQuestion();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function submitQuiz() {
+            if (confirm('Submit quiz? You cannot retake this quiz!')) {
+                clearInterval(timerInterval);
+                let score = 0;
+                questions.forEach((q, index) => {
+                    if (userAnswers[index] === q.correct) score++;
+                });
+                const percentage = ((score / questions.length) * 100).toFixed(1);
+                saveQuizResult(rollNumber, QUIZ_NAME, score, questions.length, percentage);
+                document.getElementById('quizContent').style.display = 'none';
+                document.getElementById('resultsContainer').style.display = 'block';
+                document.getElementById('scoreDisplay').textContent = score + '/' + questions.length;
+                document.getElementById('percentageDisplay').textContent = percentage + '%';
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function downloadPDF() {
+            const {jsPDF} = window.jspdf;
+            const doc = new jsPDF();
+            const score = parseInt(document.getElementById('scoreDisplay').textContent.split('/')[0]);
+            const percentage = document.getElementById('percentageDisplay').textContent;
+            
+            doc.setFontSize(20);
+            doc.text('ETI Quiz Results', 105, 20, {align: 'center'});
+            doc.setFontSize(12);
+            doc.text('Quiz: ' + QUIZ_NAME, 20, 40);
+            doc.text('Roll Number: ' + rollNumber, 20, 50);
+            doc.text('Score: ' + score + '/' + questions.length, 20, 60);
+            doc.text('Percentage: ' + percentage, 20, 70);
+            doc.text('Date: ' + new Date().toLocaleDateString('en-IN'), 20, 80);
+            doc.text('Time: ' + new Date().toLocaleTimeString('en-IN'), 20, 90);
+            
+            let y = 105;
+            doc.setFontSize(9);
+            
+            questions.forEach((q, index) => {
+                if (y > 250) {doc.addPage(); y = 20;}
+                const userAnswer = userAnswers[index];
+                const isCorrect = userAnswer === q.correct;
+                
+                // Question
+                doc.setFont(undefined, 'bold');
+                const qLines = doc.splitTextToSize('Q' + (index + 1) + ': ' + q.question, 170);
+                doc.text(qLines, 20, y);
+                y += qLines.length * 5;
+                doc.setFont(undefined, 'normal');
+                
+                // Your Answer
+                const ansText = userAnswer !== undefined ? q.options[userAnswer] : 'Not answered';
+                const ansLines = doc.splitTextToSize('Your Answer: ' + ansText, 165);
+                doc.text(ansLines, 25, y);
+                y += ansLines.length * 5;
+                
+                // Correct Answer
+                const corrLines = doc.splitTextToSize('Correct Answer: ' + q.options[q.correct], 165);
+                doc.text(corrLines, 25, y);
+                y += corrLines.length * 5;
+                
+                // Result
+                if (isCorrect) {
+                    doc.setTextColor(0, 128, 0);
+                    doc.text('Result: CORRECT', 25, y);
+                } else {
+                    doc.setTextColor(220, 0, 0);
+                    doc.text('Result: INCORRECT', 25, y);
+                }
+                doc.setTextColor(0, 0, 0);
+                y += 6;
+                
+                // Explanation
+                if (q.explanation && q.explanation.length > 0) {
+                    doc.setFont(undefined, 'italic');
+                    doc.setTextColor(60, 60, 60);
+                    const explLines = doc.splitTextToSize('Explanation: ' + q.explanation, 165);
+                    doc.text(explLines, 25, y);
+                    y += explLines.length * 5;
+                    doc.setFont(undefined, 'normal');
+                    doc.setTextColor(0, 0, 0);
+                }
+                
+                y += 4;
+            });
+            
+            doc.save('ETI_' + QUIZ_NAME.replace(' ', '_') + '_Roll' + rollNumber + '.pdf');
+        }
+
+        window.addEventListener('beforeunload', (e) => {
+            if (timerInterval && !document.getElementById('resultsContainer').style.display) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>

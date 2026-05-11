@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETI Quiz-1 - ETI Quiz Hub</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="quiz-container">
+        <div class="quiz-header">
+            <h1>ETI Quiz-1</h1>
+            <div class="quiz-info">
+                <div><strong>Questions:</strong> 70 | <strong>Time:</strong> 90 minutes</div>
+                <div class="timer" id="timer">90:00</div>
+            </div>
+        </div>
+
+        <div id="rollNumberModal" class="modal show">
+            <div class="modal-content">
+                <h2>Enter Your Roll Number</h2>
+                <p>Enter your roll number to start the quiz (1-66)</p>
+                <input type="number" id="rollNumberInput" placeholder="e.g., 45" min="1" max="66" required>
+                <button class="btn btn-primary" onclick="startQuiz()">Start Quiz</button>
+            </div>
+        </div>
+
+        <div id="quizContent" style="display: none;">
+            <div class="question-container">
+                <div class="question-number" id="questionNumber"></div>
+                <div class="question-text" id="questionText"></div>
+                <div class="options" id="optionsContainer"></div>
+            </div>
+            <div class="nav-buttons">
+                <button class="btn btn-secondary" id="prevBtn" onclick="previousQuestion()">Previous</button>
+                <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">Next</button>
+                <button class="btn btn-primary" id="submitBtn" onclick="submitQuiz()" style="display: none;">Submit Quiz</button>
+            </div>
+        </div>
+
+        <div id="resultsContainer" class="results-container" style="display: none;">
+            <h2>Quiz Completed!</h2>
+            <div class="score-display" id="scoreDisplay"></div>
+            <div class="percentage" id="percentageDisplay"></div>
+            <button class="download-btn" onclick="downloadPDF()">Download Results PDF</button>
+            <div style="margin-top: 30px;">
+                <a href="../index.html" class="btn btn-secondary">Back to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/google-sheets.js"></script>
+    <script>
+        const QUIZ_NAME = "ETI Quiz-1";
+        const TIME_LIMIT = 5400;
+        let timeLeft = TIME_LIMIT;
+        let currentQuestion = 0;
+        let userAnswers = [];
+        let rollNumber = null;
+        let timerInterval = null;
+
+        const questions = [
+        {question: "What is the fundamental definition of Artificial Intelligence (AI)?", options: ["A) A technology exclusively for storing unorganized data", "B) A technology generating machines capable of tasks requiring human intelligence, like learning and reasoning", "C) A programming language used for web applications", "D) A hardware component for improving processing speed"], correct: 1, explanation: "AI is a technology that generates machines capable of performing tasks that normally require human intelligence, such as learning, reasoning, problem-solving, and decision-making ."},
+        {question: "Which subset of AI enables computer systems to learn from data without being explicitly programmed?", options: ["A) Expert Systems", "B) Natural Language Processing", "C) Machine Learning", "D) Computer Vision"], correct: 2, explanation: "Machine Learning (ML) is the subset of AI that enables machines to learn from data to identify patterns without being explicitly programmed ."},
+        {question: "Deep Learning (DL) is best characterized by its use of:", options: ["A) Artificial neural networks with many hidden layers", "B) Manual feature extraction by human programmers", "C) Rule-based logic tables", "D) Mechanical sensors"], correct: 0, explanation: "Deep Learning is a subset of ML using artificial neural networks with many layers, excelling at image recognition and natural language understanding ."},
+        {question: "Siri, Alexa, and Google Assistant primarily rely on which AI concept to understand human speech?", options: ["A) Robotics", "B) Expert Systems", "C) Computer Vision", "D) Natural Language Processing (NLP)"], correct: 3, explanation: "NLP is AI’s ability to understand, interpret, and generate human language, and is widely used in voice assistants ."},
+        {question: "Which theoretical stage of AI describes machines possessing human-like intelligence capable of performing any intellectual task?", options: ["A) Narrow AI", "B) Artificial General Intelligence (AGI)", "C) Artificial Superintelligence (ASI)", "D) Reactive Machines"], correct: 1, explanation: "Artificial General Intelligence (AGI), also known as Strong AI, is a theoretical stage where machines possess human-like intelligence ."},
+        {question: "Which functional type of AI lacks memory and only acts in the present moment by reacting to situations?", options: ["A) Reactive Machines", "B) Limited Memory AI", "C) Theory of Mind AI", "D) Self-Aware AI"], correct: 0, explanation: "Reactive Machines are the most basic form of AI; they have no memory, cannot use past experiences, and act purely in the present ."},
+        {question: "Predicting house prices based on a labeled dataset is an example of:", options: ["A) Unsupervised Learning", "B) Semi-Supervised Learning", "C) Supervised Learning", "D) Reinforcement Learning"], correct: 2, explanation: "Supervised Learning involves training a model on a labeled dataset to map input features to known outputs, making it ideal for tasks like predicting house prices ."},
+        {question: "Which ML type trains an agent through a system of rewards and penalties?", options: ["A) Unsupervised Learning", "B) Semi-Supervised Learning", "C) Reinforcement Learning", "D) Supervised Learning"], correct: 2, explanation: "Reinforcement Learning focuses on an agent making decisions by interacting with an environment, receiving rewards or penalties based on its actions ."},
+        {question: "Generative AI fundamentally differs from traditional AI because it:", options: ["A) Only sorts data into categories", "B) Generates new content (text, images, audio) rather than just analyzing existing data", "C) Operates entirely without data", "D) Exclusively manages robotic arms"], correct: 1, explanation: "Generative AI focuses on creating new content that resembles human-made output, whereas traditional AI mainly analyzes data and makes predictions ."},
+        {question: "In a Transformer model, which mechanism permits the model to weigh the importance of different words in a sequence?", options: ["A) Positional Encoding", "B) Self-Attention Mechanism", "C) Gradient Descent", "D) Feedback Loop"], correct: 1, explanation: "The Self-Attention Mechanism allows the model to weigh the importance of different words in the input order when processing each word ."},
+        {question: "What is \"Vibe Coding\"?", options: ["A) Writing code line-by-line in binary", "B) An AI-powered practice where a human guides an LLM to generate and debug code through natural language", "C) Encrypting code securely", "D) Programming virtual reality environments"], correct: 1, explanation: "Vibe coding is a development practice where a human guides a large language model to generate and refine code through a conversational process using natural language ."},
+        {question: "Agentic AI distinguishes itself from traditional Generative AI by being:", options: ["A) Strictly reactive to prompts", "B) Completely reliant on explicit human programming", "C) Autonomous, proactive, and capable of multi-step planning", "D) Unable to access the internet"], correct: 2, explanation: "Agentic AI systems are proactive and self-directed, capable of independently making decisions and planning multi-step actions without constant oversight ."},
+        {question: "Large Language Models (LLMs) generate text primarily by:", options: ["A) Copying exact sentences from Wikipedia", "B) Analyzing patterns in data to predict the most probable next word", "C) Guessing words randomly", "D) Using if-then logic rules"], correct: 1, explanation: "By analyzing patterns in their training data, LLMs learn to predict the most probable next word or sequence of words ."},
+        {question: "What is a key advantage of Small Language Models (SLMs)?", options: ["A) They contain trillions of parameters", "B) They are highly resource-efficient and can run locally on devices", "C) They require massive cloud data centers to function", "D) They are incapable of understanding natural language"], correct: 1, explanation: "SLMs are resource-efficient, requiring less computational power and memory, which enables deployment on devices like smartphones and laptops ."},
+        {question: "What is the fundamental concept behind the Internet of Things (IoT)?", options: ["A) A local area network for office computers", "B) A vast network of physical objects embedded with sensors and software that exchange data over the internet", "C) A specialized programming language", "D) A physical router"], correct: 1, explanation: "IoT is a vast network of physical objects embedded with sensors, software, and technologies to collect and exchange data over the internet without human intervention ."},
+        {question: "Which IoT characteristic enables data processing closer to the data source rather than a central cloud server?", options: ["A) Heterogeneity", "B) Edge Computing", "C) Interoperability", "D) Identity of Things"], correct: 1, explanation: "Edge computing means data processing happens closer to where the data is generated, reducing latency and bandwidth usage ."},
+        {question: "In the logical design of IoT, which layer gathers raw data from the physical environment?", options: ["A) Application Layer", "B) Network Layer", "C) Perception (Device) Layer", "D) Data Processing Layer"], correct: 2, explanation: "The Perception Layer is the first layer responsible for collecting raw data from the physical environment using sensors and actuators ."},
+        {question: "What is the function of Signal Conditioning in IoT hardware?", options: ["A) Connecting the device to the cloud", "B) Storing massive amounts of data", "C) Manipulating an analog signal so it meets the requirements of the next processing stage", "D) Displaying data on a smartphone"], correct: 2, explanation: "Signal conditioning manipulates an analog signal (like amplifying or filtering) so that it meets the requirements of the microcontroller or ADC ."},
+        {question: "Which temperature sensor generates a voltage that varies with temperature based on the Seebeck effect?", options: ["A) Thermistor", "B) RTD", "C) Semiconductor-based sensor", "D) Thermocouple"], correct: 3, explanation: "Thermocouples generate a voltage that varies with temperature based on the Seebeck effect ."},
+        {question: "MQ-series sensors are primarily used to detect:", options: ["A) Light intensity", "B) Gases like LPG, methane, carbon monoxide, and smoke", "C) Physical motion", "D) Water pressure"], correct: 1, explanation: "MQ-series sensors are semiconductor gas sensors that detect gases like LPG, methane, carbon monoxide, and smoke ."},
+        {question: "How does an ultrasonic sensor measure distance?", options: ["A) By emitting sound waves and measuring the time it takes for the echo to return", "B) By detecting the body heat of a person", "C) By measuring light reflection", "D) By monitoring changes in magnetic fields"], correct: 0, explanation: "Ultrasonic sensors emit high-frequency sound waves and measure the time it takes for the echo to return to accurately calculate distance ."},
+        {question: "Which actuator component provides continuous monitoring of the angle to ensure precise positioning?", options: ["A) Solenoid plunger", "B) Feedback mechanism (potentiometer/encoder) in a servo motor", "C) Lead screw", "D) Relay coil"], correct: 1, explanation: "A servo motor contains a feedback mechanism (usually a potentiometer or encoder) that continuously monitors the angle and ensures accurate positioning ."},
+        {question: "What is the primary advantage of a BLDC (Brushless DC) motor?", options: ["A) It operates exclusively on AC power", "B) It requires brushes to function", "C) It uses electronic commutation, eliminating brush wear and leading to higher efficiency and longer life", "D) It generates straight-line linear motion"], correct: 2, explanation: "BLDC motors use electronic commutation instead of brushes, which eliminates wear and tear, leading to higher efficiency and a longer life ."},
+        {question: "Shape Memory Alloys (SMA) like Nitinol are valuable IoT actuators because they:", options: ["A) like Nitinol are valuable IoT actuators because they: A) Automatically generate Wi-Fi signals", "B) Generate extreme high-speed rotational torque", "C) Can be deformed when cold and return to their original shape when heated", "D) Sense ambient light levels"], correct: 2, explanation: "SMAs, such as Nitinol, are metals that can be deformed at low temperatures and return to their pre-programmed shape when heated ."},
+        {question: "What is the primary role of an IoT Gateway?", options: ["A) Acting as the final user interface", "B) Providing physical power to sensors", "C) Acting as a bridge to collect, process, and transmit data between IoT devices and cloud servers", "D) Replacing all cloud computing functions"], correct: 2, explanation: "An IoT Gateway connects IoT devices to the cloud, acting as a bridge that collects, processes, and transmits data securely ."},
+        {question: "In 5G networks, what does uRLLC stand for?", options: ["A) Ultra-reliable low-latency communication", "B) Universal remote long-link control", "C) Unified real-time local latency computing", "D) Unmanned regional location log code"], correct: 0, explanation: "Ultra-reliable low-latency communication (uRLLC) ensures near-instantaneous responses (less than 1 ms), which is crucial for critical applications ."},
+        {question: "A key defining characteristic of a Next Generation Network (NGN) is that it is:", options: ["A) Strictly analog and circuit-switched", "B) An evolved, converged, and packet-based (All-IP) architecture", "C) Limited exclusively to traditional telephone lines", "D) Unable to support video data"], correct: 1, explanation: "An NGN is an evolved, converged, and packet-based telecommunications architecture built entirely around the Internet Protocol (IP) ."},
+        {question: "In an NGN architecture, what is the role of a Media Gateway (MGW)?", options: ["A) Hosting the web browser for the user", "B) Executing smart contract logic", "C) Interconnecting different types of networks by converting voice, video, and data streams between formats", "D) Billing the end-user"], correct: 2, explanation: "A Media Gateway interconnects different types of networks (like PSTN and IP networks) by converting voice, video, and data streams between formats ."},
+        {question: "What is Blockchain Technology?", options: ["A) A centralized database controlled by a specific bank", "B) A decentralized, distributed digital ledger that securely records transactions across a peer-to-peer network", "C) An operating system for mobile phones", "D) A cloud storage provider"], correct: 1, explanation: "Blockchain is a decentralized, distributed digital ledger that securely records and verifies transactions across a peer-to-peer network of computers ."},
+        {question: "Immutability in blockchain means that:", options: ["A) Data is transparent to everyone", "B) The network runs without electricity", "C) Once a block is added, it cannot be altered or deleted", "D) The blockchain can be shut down by an admin"], correct: 2, explanation: "Immutability means that once a block of transactions is added to the blockchain, it cannot be altered or deleted, ensuring a tamper-proof record ."},
+        {question: "How does a blockchain handle data modification compared to traditional systems?", options: ["A) It allows admins to delete data freely", "B) It is an append-only structure where past data cannot be altered", "C) It automatically overwrites the oldest block", "D) It relies on a centralized server to approve edits"], correct: 1, explanation: "Traditional systems allow data to be added, updated, or deleted, while blockchain systems are append-only; past data cannot be altered ."},
+        {question: "What are \"Smart Contracts\"?", options: ["A) Printed legal documents scanned to the cloud", "B) Self-executing contracts with the terms of the agreement written directly into code", "C) Centralized servers managing bank loans", "D) Cryptographic hash functions"], correct: 1, explanation: "Smart contracts are self-executing contracts with the terms directly written into code, automatically executing actions when predefined conditions are met ."},
+        {question: "Which consensus mechanism requires miners to solve complex cryptographic puzzles to add a block?", options: ["A) Proof of Stake (PoS)", "B) Proof of Work (PoW)", "C) Delegated Proof of Stake (DPoS)", "D) Practical Byzantine Fault Tolerance (PBFT)"], correct: 1, explanation: "Proof of Work (PoW) requires miners to solve cryptographic puzzles; the first to solve it adds the block and earns a reward ."},
+        {question: "In the Network Layer, what is the difference between a Full Node and a Light Node?", options: ["A) Full Nodes run on batteries; Light Nodes run on AC power", "B) Light Nodes store only block headers and rely on Full Nodes for verification", "C) Full Nodes are illegal; Light Nodes are legal", "D) Light Nodes can alter data; Full Nodes cannot"], correct: 1, explanation: "Full Nodes store the entire blockchain and validate transactions, whereas Light Nodes store only block headers and rely on Full Nodes for verification ."},
+        {question: "Which type of blockchain allows anyone to join, view transactions, and participate without needing approval?", options: ["A) Public Blockchain", "B) Private Blockchain", "C) Consortium Blockchain", "D) Hybrid Blockchain"], correct: 0, explanation: "A public blockchain is an open-access, permissionless ledger where anyone can join, view transactions, and participate ."},
+        {question: "A Consortium Blockchain is best defined as:", options: ["A) A network controlled by a single private company", "B) A fully open network with no restrictions", "C) A semi-decentralized network governed jointly by a pre-selected group of organizations", "D) A blockchain used exclusively for gaming"], correct: 2, explanation: "A consortium blockchain is controlled jointly by a pre-selected group of organizations, offering a hybrid of scalability and decentralization ."},
+        {question: "How does a Hybrid Blockchain function?", options: ["A) It combines features of public and private blockchains, keeping some data private while sharing proof publicly", "B) It physically links two separate servers", "C) It replaces all cryptocurrencies with fiat money", "D) It relies entirely on centralized banks"], correct: 0, explanation: "A hybrid blockchain combines features from public and private blockchains, allowing organizations to keep sensitive data private while sharing proof publicly ."},
+        {question: "What does DeFi (Decentralized Finance) allow users to do?", options: ["A) Use physical cash on the blockchain", "B) Access financial services like lending and borrowing peer-to-peer without traditional banks", "C) Pay taxes automatically", "D) Delete past banking records"], correct: 1, explanation: "DeFi uses smart contracts to offer financial services like lending, borrowing, and trading peer-to-peer without traditional financial institutions ."},
+        {question: "How does blockchain benefit Electronic Health Records (EHR) management?", options: ["A) By broadcasting patient data to social media", "B) By providing a secure, decentralized ledger that gives patients control over their complete medical history", "C) By automatically diagnosing patients", "D) By eliminating doctors entirely"], correct: 1, explanation: "Blockchain provides an immutable and shared ledger for EHRs, allowing patients to control their medical history securely and enhancing interoperability ."},
+        {question: "What is a major environmental challenge associated with Proof of Work (PoW) blockchains?", options: ["A) High levels of e-waste from monitors", "B) High energy consumption due to massive computational requirements for mining", "C) Soil contamination", "D) Depletion of raw copper"], correct: 1, explanation: "PoW consensus mechanisms (like Bitcoin's) require massive computational power, leading to extremely high energy consumption and environmental concerns ."},
+        {question: "The Play-to-Earn (P2E) model in blockchain gaming allows players to:", options: ["A) Pay a subscription fee to earn points", "B) Earn tokens or NFTs with real-world value by playing, breeding, or trading", "C) Access the game completely offline", "D) Hack into the developer's server"], correct: 1, explanation: "The P2E model allows gamers to monetize their time by earning cryptocurrency or NFTs with real-world economic value ."},
+        {question: "What is a \"51% attack\" in blockchain?", options: ["A) When a network is offline 51% of the time", "B) When a single entity gains control of the majority of the network's validating power, allowing them to manipulate the ledger", "C) When a transaction loses 51% of its value", "D) When exactly 51% of nodes crash"], correct: 1, explanation: "A 51% attack occurs when a single entity or group gains control of over half of the network's mining or validating power, threatening security ."},
+        {question: "Immersive technology is fundamentally defined as digital innovations that:", options: ["A) Strictly present content on 2D flat screens", "B) Blend the physical and virtual worlds to create engaging experiences where users are active participants", "C) Print physical objects", "D) Generate text documents automatically"], correct: 1, explanation: "Immersive technology blends physical and virtual worlds, making users active participants inside interactive, lifelike experiences ."},
+        {question: "How does Augmented Reality (AR) differ from Virtual Reality (VR)?", options: ["A) AR fully replaces the real world with a digital one", "B) AR overlays digital elements onto the real world without fully replacing it, whereas VR completely replaces reality", "C) AR requires no hardware", "D) AR is purely audio-based"], correct: 1, explanation: "AR enhances the user's perception by overlaying virtual content onto the physical environment, while VR completely replaces reality with a digital world ."},
+        {question: "What makes Mixed Reality (MR) more advanced than AR?", options: ["A) It uses physical wires", "B) It blocks out the real world entirely", "C) It allows physical and digital objects to coexist and interact with each other in real-time", "D) It relies exclusively on smartphones"], correct: 2, explanation: "Unlike AR, which merely overlays data, MR enables users to manipulate and engage with both real and virtual objects as if they are part of the same environment ."},
+        {question: "Extended Reality (XR) is best described as:", options: ["A) A specific type of video game console", "B) A broad \"umbrella\" term that encompasses VR, AR, and MR", "C) A tool for increasing Wi-Fi range", "D) The underlying framework for blockchain"], correct: 1, explanation: "Extended Reality (XR) is the umbrella term covering the entire spectrum of immersive technologies: VR, AR, and MR ."},
+        {question: "Haptic Technology primarily simulates which human sense?", options: ["A) Sight", "B) Hearing", "C) Touch", "D) Taste"], correct: 2, explanation: "Haptic technology uses touch, force, and vibration feedback to simulate the sense of touch in digital interactions ."},
+        {question: "The goal of Telepresence is to:", options: ["A) Create automated chatbots", "B) Enable a person to feel as if they are physically present in a remote location", "C) Print 3D architectural models", "D) Track cryptocurrency transactions"], correct: 1, explanation: "Telepresence combines audio, video, and haptics to create a realistic sense of \"being there\" remotely, bridging the gap between physical and digital communication ."},
+        {question: "In the context of drones, FPV stands for:", options: ["A) First-Person View", "B) Fast-Processing Video", "C) Flight-Path Vector", "D) Frequency Pulse Verification"], correct: 0, explanation: "FPV stands for First-Person View Drone Flight, where the pilot controls the drone via a live video feed, feeling as if they are in the cockpit ."},
+        {question: "What is Green Computing?", options: ["A) Using green-colored hardware", "B) Designing, using, and disposing of IT systems in an eco-friendly way to reduce environmental impact", "C) A programming language for agriculture", "D) Only recycling computer monitors"], correct: 1, explanation: "Green computing is the practice of designing, manufacturing, using, and disposing of IT systems in an eco-friendly way to reduce energy use and e-waste ."},
+        {question: "What is the purpose of Server Virtualization in a Green Data Center?", options: ["A) To make servers physically smaller", "B) To run multiple virtual machines on a single physical server, reducing hardware and energy needs", "C) To create virtual reality environments for employees", "D) To cool down the server room"], correct: 1, explanation: "Virtualization consolidates hardware by running multiple virtual machines on a single physical server, significantly reducing energy and space needs ."},
+        {question: "E-waste is particularly dangerous when disposed of improperly because it:", options: ["A) Uses too much Wi-Fi bandwidth", "B) Contains toxic materials like lead, mercury, and cadmium that harm the environment", "C) Deletes files from the cloud", "D) Causes nearby computers to crash"], correct: 1, explanation: "E-waste contains toxic materials (lead, mercury, cadmium) that can severely pollute soil and water if not disposed of properly ."},
+        {question: "In E-Waste recycling, what does \"Refurbishing\" mean?", options: ["A) Melting metals into blocks", "B) Dumping waste in landfills", "C) Repairing and reselling old devices to extend their life", "D) Destroying hardware completely"], correct: 2, explanation: "Refurbishing is the process of repairing and updating old devices so they can be resold, promoting a circular economy ."},
+        {question: "What is the fundamental unit of information in Quantum Computing?", options: ["A) Bit", "B) Qubit (Quantum Bit)", "C) Byte", "D) Quantum Gate"], correct: 1, explanation: "The fundamental unit of quantum information is the Qubit (Quantum Bit), which leverages quantum properties ."},
+        {question: "The quantum principle of \"Superposition\" allows a qubit to:", options: ["A) Instantly communicate with another qubit across space", "B) Connect to the internet without Wi-Fi", "C) Exist as 0, 1, or both at the same time, allowing massive parallel computation", "D) Erase classical data"], correct: 2, explanation: "Superposition allows a qubit to exist in multiple states simultaneously (0, 1, or both), enabling immense parallel computational power ."},
+        {question: "How is Quantum Computing expected to assist the medical sector?", options: ["A) By acting as virtual nurses", "B) By printing 3D human organs", "C) By simulating molecular interactions to rapidly discover and design new drugs", "D) By tracking ambulances via GPS"], correct: 2, explanation: "Quantum computing can simulate complex molecular interactions accurately to design new medications and vaccines much faster than classical computers ."},
+        {question: "What is the primary goal of digital forensics?", options: ["A) To hack into an enemy's server", "B) To physically repair broken computers", "C) To identify, collect, preserve, and analyze electronic data to investigate incidents for legal proceedings", "D) To format hard drives"], correct: 2, explanation: "Digital forensics is the science of identifying, collecting, preserving, and analyzing electronic data to investigate incidents for legal admissibility ."},
+        {question: "In the rules of digital evidence, what does \"Authenticity\" ensure?", options: ["A) That the data presents the entire story", "B) That the evidence was gathered by a machine", "C) That the evidence is proven to be exactly what it is claimed to be, without alteration", "D) That the data has been publicly published"], correct: 2, explanation: "Authenticity dictates that evidence must be proven to be what it is claimed to be, ensuring it hasn't been altered from its original state ."},
+        {question: "What is the purpose of maintaining a \"Chain of Custody\"?", options: ["A) To physically lock the server room", "B) To keep a detailed record of every person who has collected, accessed, or transferred the evidence", "C) To encrypt files automatically", "D) To link block hashes together"], correct: 1, explanation: "The Chain of Custody is a critical record of who handled the evidence, from collection to presentation, ensuring legal credibility ."},
+        {question: "What is \"Ethical Hacking\"?", options: ["A) Stealing passwords to teach a lesson", "B) The authorized practice of using hacking techniques to find and fix security vulnerabilities", "C) A tool for spamming email servers", "D) Modifying hardware warranties"], correct: 1, explanation: "Ethical hacking is the authorized practice of exploiting systems to find and fix security vulnerabilities with the owner's permission ."},
+        {question: "Which type of hacker operates in a morally ambiguous zone, occasionally discovering vulnerabilities without authorization but lacking malicious intent?", options: ["A) Black Hat Hacker", "B) White Hat Hacker", "C) Red Hat Hacker", "D) Gray Hat Hacker"], correct: 3, explanation: "Gray Hat Hackers operate in a morally ambiguous zone, finding vulnerabilities without permission but usually reporting them without malicious intent ."},
+        {question: "A \"Script Kiddie\" is best described as:", options: ["A) A highly advanced government hacker", "B) A corporate network admin", "C) An amateur hacker who uses pre-written scripts and tools created by others", "D) A specialist in writing smart contracts"], correct: 2, explanation: "Script Kiddies are amateur, inexperienced hackers who rely on pre-written scripts and automated tools to carry out attacks ."},
+        {question: "Why are AI-Powered Phishing scams significantly more dangerous?", options: ["A) They instantly destroy hardware", "B) They use hyper-personalization and generate grammatically perfect text, making them incredibly difficult to detect", "C) They operate entirely offline", "D) They only target cell phone numbers"], correct: 1, explanation: "AI uses vast amounts of public data to craft hyper-personalized, contextually accurate, and grammatically perfect emails that easily fool targets ."},
+        {question: "\"Ransomware 2.0\" is characterized by the use of \"Double Extortion,\" which means attackers:", options: ["A) Encrypt data on two computers simultaneously", "B) Steal sensitive data first and threaten to leak it if the ransom isn't paid, in addition to encrypting it", "C) Demand payment in two different currencies", "D) Only attack mobile devices"], correct: 1, explanation: "Ransomware 2.0 incorporates double extortion, where attackers steal data first and threaten to leak it if the ransom isn't paid, alongside encrypting files ."},
+        {question: "A \"Zero-Day Exploit\" is an attack that takes advantage of:", options: ["A) A vulnerability that is entirely unknown to the software vendor and the public", "B) An outdated password", "C) A physical break-in", "D) A vulnerability that was patched years ago"], correct: 0, explanation: "A zero-day vulnerability is a flaw unknown to the vendor, leaving \"zero days\" to prepare a patch before attackers exploit it ."},
+        {question: "What occurs during an OS Downgrade Attack?", options: ["A) An attacker forces a fully patched system to roll back to a previous, vulnerable version of the operating system", "B) An attacker steals the user's password", "C) The computer's screen resolution is lowered", "D) The system installs a newer, safer OS"], correct: 0, explanation: "An OS downgrade attack forces a patched system to roll back to an outdated, vulnerable version, allowing the attacker to bypass modern security protections ."},
+        {question: "Why are \"Firmware-level exploits\" particularly difficult to detect?", options: ["A) They disguise themselves as text messages", "B) They reside below the operating system and traditional antivirus software, often controlling the boot process", "C) They emit high-frequency sound waves", "D) They only work when the computer is turned off"], correct: 1, explanation: "Firmware exploits operate at a very low level, below the OS layer, making them highly stealthy, persistent, and difficult for standard antivirus to detect ."},
+        {question: "Under the Information Technology Act, 2000, Section 66 prescribes penalties for which offense?", options: ["A) Publishing obscene material", "B) Hacking a computer system", "C) Identity theft", "D) Cyber terrorism"], correct: 1, explanation: "Section 66 prescribes a penalty of up to 3 years in prison or a Rs.5 lakh fine, or both, for hacking or dishonestly causing damage to a computer system ."},
+        {question: "The Digital Personal Data Protection (DPDP) Act, 2023 focuses heavily on:", options: ["A) Strengthening military telecommunications", "B) Safeguarding individuals’ digital personal data and regulating its lawful processing", "C) Punishing physical theft", "D) Enhancing drone flights"], correct: 1, explanation: "The DPDP Act regulates the processing of digital personal data, balancing the individual's right to protect their data with the need to process it for lawful purposes ."},
+        {question: "What is the maximum monetary penalty that can be imposed on Data Fiduciaries for non-compliance under the DPDP Act 2023?", options: ["A) Rs.1 lakh", "B) Rs.10,000", "C) Up to Rs.250 crore", "D) Unlimited fines"], correct: 2, explanation: "The DPDP Act introduces heavy monetary penalties for breaches by Data Fiduciaries, which can reach up to Rs.250 crore"}
+        ];
+
+        function startQuiz() {
+            const input = document.getElementById('rollNumberInput');
+            rollNumber = parseInt(input.value);
+            if (!rollNumber || rollNumber < 1 || rollNumber > 66) {
+                alert('Please enter a valid roll number (1-66)');
+                return;
+            }
+            const btn = document.querySelector('#rollNumberModal .btn-primary');
+            btn.textContent = 'Checking...';
+            btn.disabled = true;
+            
+            checkPreviousAttempt(rollNumber, QUIZ_NAME).then(result => {
+                if (result && result.attempted === true) {
+                    alert('You have already attempted this quiz!\n\nDate: ' + result.date + '\nScore: ' + result.score + '/' + result.total + ' (' + result.percentage + '%)\n\nYou cannot retake this quiz.');
+                    window.location.href = '../index.html';
+                    return;
+                }
+                document.getElementById('rollNumberModal').classList.remove('show');
+                document.getElementById('quizContent').style.display = 'block';
+                startTimer();
+                displayQuestion();
+            });
+        }
+
+        function startTimer() {
+            const timerElement = document.getElementById('timer');
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                timerElement.textContent = minutes + ':' + seconds.toString().padStart(2, '0');
+                if (timeLeft <= 300) timerElement.classList.add('warning');
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    submitQuiz();
+                }
+            }, 1000);
+        }
+
+        function displayQuestion() {
+            const q = questions[currentQuestion];
+            document.getElementById('questionNumber').textContent = 'Question ' + (currentQuestion + 1) + ' of ' + questions.length;
+            document.getElementById('questionText').textContent = q.question;
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = '';
+            q.options.forEach((option, index) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                if (userAnswers[currentQuestion] === index) optionDiv.classList.add('selected');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'answer';
+                radio.value = index;
+                radio.checked = userAnswers[currentQuestion] === index;
+                radio.onchange = () => selectAnswer(index);
+                optionDiv.appendChild(radio);
+                optionDiv.appendChild(document.createTextNode(option));
+                optionDiv.onclick = () => {
+                    radio.checked = true;
+                    selectAnswer(index);
+                };
+                optionsContainer.appendChild(optionDiv);
+            });
+            document.getElementById('prevBtn').disabled = currentQuestion === 0;
+            const nextBtn = document.getElementById('nextBtn');
+            const submitBtn = document.getElementById('submitBtn');
+            if (currentQuestion === questions.length - 1) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'block';
+            } else {
+                nextBtn.style.display = 'block';
+                submitBtn.style.display = 'none';
+            }
+        }
+
+        function selectAnswer(index) {
+            userAnswers[currentQuestion] = index;
+            document.querySelectorAll('.option').forEach((opt, i) => {
+                opt.classList.toggle('selected', i === index);
+            });
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < questions.length - 1) {
+                currentQuestion++;
+                displayQuestion();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function previousQuestion() {
+            if (currentQuestion > 0) {
+                currentQuestion--;
+                displayQuestion();
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function submitQuiz() {
+            if (confirm('Submit quiz? You cannot retake this quiz!')) {
+                clearInterval(timerInterval);
+                let score = 0;
+                questions.forEach((q, index) => {
+                    if (userAnswers[index] === q.correct) score++;
+                });
+                const percentage = ((score / questions.length) * 100).toFixed(1);
+                saveQuizResult(rollNumber, QUIZ_NAME, score, questions.length, percentage);
+                document.getElementById('quizContent').style.display = 'none';
+                document.getElementById('resultsContainer').style.display = 'block';
+                document.getElementById('scoreDisplay').textContent = score + '/' + questions.length;
+                document.getElementById('percentageDisplay').textContent = percentage + '%';
+                window.scrollTo(0, 0);
+            }
+        }
+
+        function downloadPDF() {
+            const {jsPDF} = window.jspdf;
+            const doc = new jsPDF();
+            const score = parseInt(document.getElementById('scoreDisplay').textContent.split('/')[0]);
+            const percentage = document.getElementById('percentageDisplay').textContent;
+            
+            doc.setFontSize(20);
+            doc.text('ETI Quiz Results', 105, 20, {align: 'center'});
+            doc.setFontSize(12);
+            doc.text('Quiz: ' + QUIZ_NAME, 20, 40);
+            doc.text('Roll Number: ' + rollNumber, 20, 50);
+            doc.text('Score: ' + score + '/' + questions.length, 20, 60);
+            doc.text('Percentage: ' + percentage, 20, 70);
+            doc.text('Date: ' + new Date().toLocaleDateString('en-IN'), 20, 80);
+            doc.text('Time: ' + new Date().toLocaleTimeString('en-IN'), 20, 90);
+            
+            let y = 105;
+            doc.setFontSize(9);
+            
+            questions.forEach((q, index) => {
+                if (y > 250) {doc.addPage(); y = 20;}
+                const userAnswer = userAnswers[index];
+                const isCorrect = userAnswer === q.correct;
+                
+                // Question
+                doc.setFont(undefined, 'bold');
+                const qLines = doc.splitTextToSize('Q' + (index + 1) + ': ' + q.question, 170);
+                doc.text(qLines, 20, y);
+                y += qLines.length * 5;
+                doc.setFont(undefined, 'normal');
+                
+                // Your Answer
+                const ansText = userAnswer !== undefined ? q.options[userAnswer] : 'Not answered';
+                const ansLines = doc.splitTextToSize('Your Answer: ' + ansText, 165);
+                doc.text(ansLines, 25, y);
+                y += ansLines.length * 5;
+                
+                // Correct Answer
+                const corrLines = doc.splitTextToSize('Correct Answer: ' + q.options[q.correct], 165);
+                doc.text(corrLines, 25, y);
+                y += corrLines.length * 5;
+                
+                // Result
+                if (isCorrect) {
+                    doc.setTextColor(0, 128, 0);
+                    doc.text('Result: CORRECT', 25, y);
+                } else {
+                    doc.setTextColor(220, 0, 0);
+                    doc.text('Result: INCORRECT', 25, y);
+                }
+                doc.setTextColor(0, 0, 0);
+                y += 6;
+                
+                // Explanation
+                if (q.explanation && q.explanation.length > 0) {
+                    doc.setFont(undefined, 'italic');
+                    doc.setTextColor(60, 60, 60);
+                    const explLines = doc.splitTextToSize('Explanation: ' + q.explanation, 165);
+                    doc.text(explLines, 25, y);
+                    y += explLines.length * 5;
+                    doc.setFont(undefined, 'normal');
+                    doc.setTextColor(0, 0, 0);
+                }
+                
+                y += 4;
+            });
+            
+            doc.save('ETI_' + QUIZ_NAME.replace(' ', '_') + '_Roll' + rollNumber + '.pdf');
+        }
+
+        window.addEventListener('beforeunload', (e) => {
+            if (timerInterval && !document.getElementById('resultsContainer').style.display) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>
